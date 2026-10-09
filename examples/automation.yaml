@@ -1,0 +1,27 @@
+# Paste into automations.yaml, or into a new automation in the UI (⋮ → Edit in
+# YAML, leaving out the leading "- ").
+#
+# Keeps exposure in line with the labels whenever a label, area or device
+# assignment changes, at startup, and nightly as a backstop. Turn it on only after
+# a dry run of the script showed the changes you expected.
+- id: sync_voice_exposure_on_change
+  alias: Sync voice exposure when labels change
+  mode: restart
+  triggers:
+    - trigger: homeassistant
+      event: start
+    - trigger: event
+      event_type: entity_registry_updated
+    - trigger: event
+      event_type: device_registry_updated
+    - trigger: event
+      event_type: area_registry_updated
+    - trigger: time
+      at: "03:30:00"
+  actions:
+    # A bulk relabel fires one event per entity. mode: restart with this delay
+    # runs the sync once, after the last of them.
+    - delay: "00:00:10"
+    - action: script.sync_voice_exposure
+      data:
+        make_changes: true

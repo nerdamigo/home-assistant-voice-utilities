@@ -1,0 +1,42 @@
+set:
+  fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          multiple: true
+    expose:
+      required: true
+      default: true
+      selector:
+        boolean:
+    assistants: &assistants
+      default: [conversation]
+      selector:
+        select:
+          multiple: true
+          options:
+            - conversation
+            - cloud.alexa
+            - cloud.google_assistant
+    dry_run:
+      default: false
+      selector:
+        boolean:
+
+sync:
+  fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          multiple: true
+    assistants: *assistants
+    unexpose_others:
+      default: false
+      selector:
+        boolean:
+    dry_run:
+      default: true
+      selector:
+        boolean:

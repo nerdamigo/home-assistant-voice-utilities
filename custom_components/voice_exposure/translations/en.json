@@ -1,0 +1,34 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "description": "Adds the voice_exposure.set and voice_exposure.sync actions, for exposing entities to voice assistants from scripts and automations."
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Voice exposure is already set up."
+    }
+  },
+  "services": {
+    "set": {
+      "name": "Set exposure",
+      "description": "Exposes or unexposes the given entities to voice assistants.",
+      "fields": {
+        "entity_id": { "name": "Entities", "description": "The entities to change." },
+        "expose": { "name": "Expose", "description": "On to expose, off to unexpose." },
+        "assistants": { "name": "Assistants", "description": "conversation is Assist, which custom agents such as Jev also read." },
+        "dry_run": { "name": "Dry run", "description": "Report what would change without changing it." }
+      }
+    },
+    "sync": {
+      "name": "Sync exposure",
+      "description": "Makes exactly these entities exposed. With unexpose others on, every other entity is unexposed. Returns what changed.",
+      "fields": {
+        "entity_id": { "name": "Entities", "description": "Every entity that should be exposed, usually from a template." },
+        "assistants": { "name": "Assistants", "description": "conversation is Assist, which custom agents such as Jev also read." },
+        "unexpose_others": { "name": "Unexpose others", "description": "Unexpose every entity not in the list." },
+        "dry_run": { "name": "Dry run", "description": "Report what would change without changing it. On by default." }
+      }
+    }
+  }
+}

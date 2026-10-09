@@ -1,0 +1,14 @@
+{
+  "domain": "voice_exposure",
+  "name": "Voice exposure",
+  "codeowners": ["@nerdamigo"],
+  "config_flow": true,
+  "dependencies": ["homeassistant"],
+  "documentation": "https://github.com/nerdamigo/home-assistant-voice-utilities",
+  "integration_type": "service",
+  "iot_class": "calculated",
+  "issue_tracker": "https://github.com/nerdamigo/home-assistant-voice-utilities/issues",
+  "requirements": [],
+  "single_config_entry": true,
+  "version": "0.1.0"
+}

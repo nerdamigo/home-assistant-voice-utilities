@@ -1,0 +1,77 @@
+# Paste into scripts.yaml, or into a new script in the UI (⋮ → Edit in YAML,
+# leaving out the first line).
+#
+# Exposes to Assist exactly what carries the "voice" label, on the entity, its
+# device or its area, and unexposes everything else. "no_voice" on an entity or a
+# device keeps it out even inside a labeled area.
+#
+# Run it with Make changes off first: it only reports what it would change.
+sync_voice_exposure:
+  alias: Sync voice exposure from labels
+  mode: queued
+  fields:
+    make_changes:
+      name: Make changes
+      description: Off reports what would change. On changes it.
+      default: false
+      selector:
+        boolean:
+  sequence:
+    - variables:
+        make_changes: "{{ make_changes | default(false) | bool }}"
+        # Kinds of entity a voice command may touch. lock, alarm_control_panel and
+        # garage, gate and door covers are left out on purpose, as Jev and Home
+        # Assistant's own defaults do. Add them here only deliberately.
+        domains:
+          - light
+          - switch
+          - fan
+          - cover
+          - climate
+          - media_player
+          - vacuum
+          - scene
+          - script
+          - input_boolean
+          - sensor
+          - binary_sensor
+        wanted: >-
+          {% set ns = namespace(ids=label_entities('voice'), never=label_entities('no_voice'), out=[]) %}
+          {% for d in label_devices('voice') %}{% set ns.ids = ns.ids + device_entities(d) %}{% endfor %}
+          {% for a in label_areas('voice') %}{% set ns.ids = ns.ids + area_entities(a) %}{% endfor %}
+          {% for d in label_devices('no_voice') %}{% set ns.never = ns.never + device_entities(d) %}{% endfor %}
+          {% for e in ns.ids | unique | sort %}
+            {% if e.split('.')[0] in domains
+                  and e not in ns.never
+                  and not is_hidden_entity(e)
+                  and not (e.startswith('cover.') and state_attr(e, 'device_class') in ['garage', 'gate', 'door']) %}
+              {% set ns.out = ns.out + [e] %}
+            {% endif %}
+          {% endfor %}
+          {{ ns.out }}
+    - action: voice_exposure.sync
+      data:
+        entity_id: "{{ wanted }}"
+        assistants: [conversation]
+        unexpose_others: true
+        dry_run: "{{ not make_changes }}"
+      response_variable: result
+    - variables:
+        changes: "{{ result.assistants.conversation }}"
+    - if:
+        - condition: template
+          value_template: "{{ changes.exposed or changes.unexposed }}"
+      then:
+        - action: persistent_notification.create
+          data:
+            notification_id: voice_exposure_sync
+            title: "Voice exposure {{ 'changed' if make_changes else 'dry run' }}"
+            message: >-
+              {{ 'Exposed' if make_changes else 'Would expose' }} ({{ changes.exposed | count }}):
+              {{ changes.exposed | join(', ') or 'nothing' }}
+
+
+              {{ 'Unexposed' if make_changes else 'Would unexpose' }} ({{ changes.unexposed | count }}):
+              {{ changes.unexposed | join(', ') or 'nothing' }}
+    - stop: Done
+      response_variable: result
