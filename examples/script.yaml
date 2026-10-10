@@ -58,9 +58,14 @@ sync_voice_exposure:
       response_variable: result
     - variables:
         changes: "{{ result.assistants.conversation }}"
+    # A dry run always reports, so it never looks like nothing happened. A real
+    # run reports only a change, so the automation does not notify every night.
+    # A template condition passes only when it renders "true", so compare counts.
     - if:
         - condition: template
-          value_template: "{{ changes.exposed or changes.unexposed }}"
+          value_template: >-
+            {{ not make_changes
+               or (changes.exposed | count) + (changes.unexposed | count) > 0 }}
       then:
         - action: persistent_notification.create
           data:

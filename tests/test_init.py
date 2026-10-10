@@ -3,7 +3,10 @@
 from pathlib import Path
 
 import pytest
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pytest_homeassistant_custom_component.common import (
+    MockConfigEntry,
+    async_mock_service,
+)
 import yaml
 
 from homeassistant.components.homeassistant.exposed_entities import (
@@ -129,6 +132,9 @@ async def test_sync_refuses_to_unexpose_everything(hass: HomeAssistant, loaded) 
 
     with pytest.raises(ServiceValidationError):
         await call(hass, "sync", entity_id=[], unexpose_others=True, dry_run=False)
+    # A dry run may show what that would do.
+    dry = await call(hass, "sync", entity_id=[], unexpose_others=True)
+    assert dry["assistants"]["conversation"]["unexposed"] == ["light.desk"]
     # An empty template renders as "", which is accepted without unexpose_others.
     await call(hass, "sync", entity_id="", dry_run=False)
     assert exposed(hass, "light.desk") == [True]
@@ -192,6 +198,7 @@ async def test_example_script(hass: HomeAssistant, loaded) -> None:
     for entity_id in hass.states.async_entity_ids():
         async_expose_entity(hass, "conversation", entity_id, entity_id == "light.kitchen")
 
+    notices = async_mock_service(hass, "persistent_notification", "create")
     scripts = yaml.safe_load((EXAMPLES / "script.yaml").read_text())
     assert await async_setup_component(hass, "script", {"script": scripts})
     await hass.async_block_till_done()
@@ -207,12 +214,18 @@ async def test_example_script(hass: HomeAssistant, loaded) -> None:
         "switch.office_plug",
     ]
     assert dry["assistants"]["conversation"]["unexposed"] == ["light.kitchen"]
-    notice = hass.states.get("persistent_notification.voice_exposure_sync")
-    assert notice is None or "dry run" in str(notice)
+    assert len(notices) == 1
+    assert notices[0].data["title"] == "Voice exposure dry run"
+    assert "Would expose (4): light.labeled, light.office_ceiling" in (
+        notices[0].data["message"]
+    )
+    assert "Would unexpose (1): light.kitchen" in notices[0].data["message"]
 
     await hass.services.async_call(
         "script", "sync_voice_exposure", {"make_changes": True}, blocking=True, return_response=True
     )
+    assert len(notices) == 2
+    assert notices[1].data["title"] == "Voice exposure changed"
     assert exposed(
         hass,
         "light.labeled",
@@ -233,3 +246,60 @@ async def test_example_script(hass: HomeAssistant, loaded) -> None:
 def test_example_automation_parses() -> None:
     automations = yaml.safe_load((EXAMPLES / "automation.yaml").read_text())
     assert automations[0]["actions"][-1]["action"] == "script.sync_voice_exposure"
+
+
+async def test_example_script_with_nothing_labeled(hass: HomeAssistant, loaded) -> None:
+    """Before any labels, a dry run shows everything would go, and nothing does."""
+    lr.async_get(hass).async_create("voice")
+    lr.async_get(hass).async_create("no_voice")
+    add(hass, "light.desk")
+    async_expose_entity(hass, "conversation", "light.desk", True)
+    notices = async_mock_service(hass, "persistent_notification", "create")
+    scripts = yaml.safe_load((EXAMPLES / "script.yaml").read_text())
+    assert await async_setup_component(hass, "script", {"script": scripts})
+    await hass.async_block_till_done()
+
+    await hass.services.async_call(
+        "script", "sync_voice_exposure", {}, blocking=True, return_response=True
+    )
+    assert len(notices) == 1
+    assert "Would expose (0): nothing" in notices[0].data["message"]
+    assert "Would unexpose (1): light.desk" in notices[0].data["message"]
+    assert exposed(hass, "light.desk") == [True]
+
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            "script", "sync_voice_exposure", {"make_changes": True}, blocking=True,
+            return_response=True,
+        )
+    assert exposed(hass, "light.desk") == [True]
+
+
+async def test_example_script_reports_nothing_to_change(
+    hass: HomeAssistant, loaded
+) -> None:
+    """A dry run with nothing to change still says so. A real run stays quiet."""
+    voice = lr.async_get(hass).async_create("voice").label_id
+    lr.async_get(hass).async_create("no_voice")
+    add(hass, "light.desk")
+    er.async_get(hass).async_update_entity("light.desk", labels={voice})
+    async_expose_entity(hass, "conversation", "light.desk", True)
+    notices = async_mock_service(hass, "persistent_notification", "create")
+    scripts = yaml.safe_load((EXAMPLES / "script.yaml").read_text())
+    assert await async_setup_component(hass, "script", {"script": scripts})
+    await hass.async_block_till_done()
+    for entity_id in hass.states.async_entity_ids("script"):
+        async_expose_entity(hass, "conversation", entity_id, False)
+
+    await hass.services.async_call(
+        "script", "sync_voice_exposure", {}, blocking=True, return_response=True
+    )
+    assert len(notices) == 1
+    assert "Would expose (0): nothing" in notices[0].data["message"]
+    assert "Would unexpose (0): nothing" in notices[0].data["message"]
+
+    await hass.services.async_call(
+        "script", "sync_voice_exposure", {"make_changes": True}, blocking=True,
+        return_response=True,
+    )
+    assert len(notices) == 1

@@ -96,8 +96,9 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         desired: list[str] = call.data[ATTR_ENTITY_ID]
         unexpose_others: bool = call.data[ATTR_UNEXPOSE_OTHERS]
         # An empty selection with unexpose_others would unexpose the whole house,
-        # which is far more often a broken template than an intention.
-        if not desired and unexpose_others:
+        # which is far more often a broken template than an intention. A dry run
+        # changes nothing, and showing what that would do is its whole point.
+        if not desired and unexpose_others and not call.data[ATTR_DRY_RUN]:
             raise ServiceValidationError(
                 "entity_id is empty and unexpose_others is on, which would unexpose "
                 "every entity. Use voice_exposure.set to unexpose on purpose."
